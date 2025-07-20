@@ -13,7 +13,8 @@ function showMenu($directories) {
 // Función para listar los directorios
 function listDirectories($path) {
   $directories = array_filter(glob($path . '/*'), 'is_dir');
-  return array_map('basename', $directories);
+  $directories = array_map('basename', $directories);
+  return array_combine(range(1, count($directories)), $directories);
 }
 
 // Función para ejecutar el script de la carpeta seleccionada
@@ -34,13 +35,17 @@ do {
   // Listar las carpetas en el directorio base
   $directories = listDirectories($basePath);
 
+  // print_r($directories);
+
   // Mostrar el menú
   showMenu($directories);
 
+  // exit;
   // Obtener la selección del usuario
   echo "Selecciona un número: ";
   $input = trim(fgets(STDIN));
 
+  // echo $input;
   // Ejecutar el script basado en la selección
   if (is_numeric($input)) {
     $choice = intval($input);

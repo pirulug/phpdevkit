@@ -1,84 +1,107 @@
 <?php
-// Configuración de PHP para errores
+// ==============================
+// CONFIGURACIÓN DE ERRORES PHP
+// ==============================
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-// Valores por defecto
+// ==============================
+// COLORES PARA LA TERMINAL
+// ==============================
+if (!defined('COLOR_RESET')) define('COLOR_RESET', "\033[0m");
+if (!defined('COLOR_CYAN')) define('COLOR_CYAN', "\033[36m");
+if (!defined('COLOR_GREEN')) define('COLOR_GREEN', "\033[32m");
+if (!defined('COLOR_YELLOW')) define('COLOR_YELLOW', "\033[33m");
+if (!defined('COLOR_RED')) define('COLOR_RED', "\033[31m");
+if (!defined('COLOR_BOLD')) define('COLOR_BOLD', "\033[1m");
+
+// ==============================
+// DATOS POR DEFECTO
+// ==============================
 $defaultHost     = 'localhost';
 $defaultUser     = 'root';
 $defaultPassword = '';
 
-// Pedir información al usuario
-echo "Ingresa host de DB (por defecto: $defaultHost): ";
+// ==============================
+// INGRESO DE CREDENCIALES
+// ==============================
+echo COLOR_CYAN . "╔══════════════════════════════════════╗\n";
+echo "║       Generador de Backup SQL        ║\n";
+echo "║               By Pirulug             ║\n";
+echo "╚══════════════════════════════════════╝\n" . COLOR_RESET;
+
+echo COLOR_YELLOW . "Host de DB (por defecto: $defaultHost): " . COLOR_RESET;
 $host = trim(fgets(STDIN));
 $host = empty($host) ? $defaultHost : $host;
 
-echo "Ingresa usuario de DB (por defecto: $defaultUser): ";
+echo COLOR_YELLOW . "Usuario de DB (por defecto: $defaultUser): " . COLOR_RESET;
 $dbUser = trim(fgets(STDIN));
 $dbUser = empty($dbUser) ? $defaultUser : $dbUser;
 
-echo "Ingresa contraseña (vacío por defecto): ";
+echo COLOR_YELLOW . "Contraseña (enter si está vacía): " . COLOR_RESET;
 $dbPassword = trim(fgets(STDIN));
 $dbPassword = empty($dbPassword) ? $defaultPassword : $dbPassword;
 
-// Conectar a la base de datos para obtener la lista de bases de datos
 try {
   $pdo = new PDO("mysql:host=$host", $dbUser, $dbPassword);
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  // Obtener la lista de bases de datos
+  // ==============================
+  // OBTENER BASES DE DATOS
+  // ==============================
   $stmt      = $pdo->query("SHOW DATABASES");
   $databases = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
   if (empty($databases)) {
-    die("No se encontraron bases de datos.\n");
+    die(COLOR_RED . "No se encontraron bases de datos.\n" . COLOR_RESET);
   }
 
-  // Mostrar la lista de bases de datos
-  echo "Selecciona una base de datos por número:\n";
+  echo "\n" . COLOR_GREEN . "Bases de datos disponibles:\n" . COLOR_RESET;
   foreach ($databases as $index => $database) {
-    echo ($index + 1) . ". $database\n";
+    echo COLOR_CYAN . "  [" . ($index + 1) . "] " . COLOR_RESET . "$database\n";
   }
 
-  // Pedir al usuario que elija una base de datos
-  echo "Número de la base de datos: ";
+  echo COLOR_YELLOW . "Número de la base de datos: " . COLOR_RESET;
   $choice = trim(fgets(STDIN));
 
-  // Validar la elección
   if (!is_numeric($choice) || $choice < 1 || $choice > count($databases)) {
-    die("Selección inválida.\n");
+    die(COLOR_RED . "Selección inválida.\n" . COLOR_RESET);
   }
 
   $dbName = $databases[$choice - 1];
 
-  // Conectar a la base de datos seleccionada
   $pdo = new PDO("mysql:host=$host;dbname=$dbName", $dbUser, $dbPassword);
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  // Obtener el nombre de las tablas
+  // ==============================
+  // OBTENER TABLAS
+  // ==============================
   $stmt   = $pdo->query("SHOW TABLES");
   $tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
   if (empty($tables)) {
-    die("No se encontraron tablas en la base de datos.\n");
+    die(COLOR_RED . "No se encontraron tablas en la base de datos.\n" . COLOR_RESET);
   }
 
-  // Generar el archivo de copia de seguridad
   $backupFile = "$dbName-clean.sql";
   $fileHandle = fopen($backupFile, 'w');
 
   if (!$fileHandle) {
-    die("No se pudo crear el archivo de copia de seguridad.\n");
+    die(COLOR_RED . "No se pudo crear el archivo de backup.\n" . COLOR_RESET);
   }
 
-  // Exportar la estructura de cada tabla
+  echo COLOR_GREEN . "\nGenerando estructura limpia de tablas:\n" . COLOR_RESET;
+
+  // ==============================
+  // PROCESAR TABLAS
+  // ==============================
   foreach ($tables as $table) {
-    // Obtener columnas
+    echo COLOR_CYAN . "  - $table\n" . COLOR_RESET;
+
     $stmt      = $pdo->query("SHOW COLUMNS FROM `$table`");
     $columns   = [];
     $indexInfo = [];
 
-    // Obtener información de índices: UNIQUE, INDEX, etc.
     $indexStmt = $pdo->query("SHOW INDEX FROM `$table`");
     while ($idx = $indexStmt->fetch(PDO::FETCH_ASSOC)) {
       $col = $idx['Column_name'];
@@ -86,11 +109,8 @@ try {
         $indexInfo[$col] = 'PRIMARY KEY';
       } elseif ($idx['Non_unique'] == 0) {
         $indexInfo[$col] = 'UNIQUE';
-      } else {
-        // Solo agregar INDEX si no es ya PRIMARY o UNIQUE
-        if (!isset($indexInfo[$col])) {
-          $indexInfo[$col] = 'INDEX';
-        }
+      } elseif (!isset($indexInfo[$col])) {
+        $indexInfo[$col] = 'INDEX';
       }
     }
 
@@ -99,14 +119,16 @@ try {
 
     while ($col = $stmt->fetch(PDO::FETCH_OBJ)) {
       $line = "{$col->Field} {$col->Type}";
-      if ($col->Null === 'NO')
+      if ($col->Null === 'NO') {
         $line .= " NOT NULL";
-      if ($col->Default !== null)
+      }
+      if ($col->Default !== null) {
         $line .= " DEFAULT '{$col->Default}'";
-      if ($col->Extra)
+      }
+      if ($col->Extra) {
         $line .= " {$col->Extra}";
+      }
 
-      // Agregar clave al final si aplica
       if (isset($indexInfo[$col->Field])) {
         $type = $indexInfo[$col->Field];
         if ($type === 'PRIMARY KEY') {
@@ -124,13 +146,13 @@ try {
     $finalSQL .= "  " . implode(",\n  ", $columns) . "\n";
     $finalSQL .= ");\n\n";
 
-    // Guardar en archivo
     fwrite($fileHandle, $finalSQL);
   }
 
-  // fclose($fileHandle);
+  fclose($fileHandle);
 
-  echo "Copia de seguridad de la estructura creada exitosamente: $backupFile\n";
+  echo COLOR_GREEN . "\n✅ Copia de seguridad generada exitosamente: $backupFile\n" . COLOR_RESET;
+
 } catch (PDOException $e) {
-  die("Error de conexión: " . $e->getMessage() . "\n");
+  die(COLOR_RED . "Error de conexión: " . $e->getMessage() . "\n" . COLOR_RESET);
 }
